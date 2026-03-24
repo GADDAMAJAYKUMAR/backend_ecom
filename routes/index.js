@@ -7,7 +7,6 @@ const productVariantRoutes = require('./productVariantRoute');
 const specificationRoutes = require('./product/specifications.routes');
 const wishlistRoutes = require('./wishlis_troutes');
 const reviewRoutes = require('./Review');
-const qaRoutes = require('./qa.routes');
 
 const router = express.Router();
 
@@ -28,6 +27,5 @@ router.use('/product-variants', productVariantRoutes);
 router.use('/specifications', specificationRoutes);
 router.use('/wishlist', wishlistRoutes);
 router.use('/reviews', reviewRoutes);
-router.use('/products', qaRoutes);
 
 module.exports = router;
