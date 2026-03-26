@@ -14,6 +14,7 @@ const  createDatabaseIfNotExists  = require('./utils/createDatabase');
 
 // ✅ ROUTES
 const routes = require('./routes/index');
+const qaRoutes = require("./routes/qa.routes");
 
 const app = express();
 
@@ -67,6 +68,9 @@ app.get('/api/health', (req, res) => {
     message: 'Server is running'
   });
 });
+
+// ✅ Adjust QA route registration
+app.use('/api/products', qaRoutes);
 
 // ================= 404 HANDLER =================
 app.use((req, res) => {

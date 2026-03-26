@@ -12,6 +12,10 @@ const sendResponse = (res, { status = 200, success = true, message = "", data = 
    ================= CLIENT CONTROLLERS =====================
    ========================================================= */
 
+/**
+ * Get all specifications
+ * GET /api/specifications
+ */
 /* ================= GET ALL SPECIFICATIONS ================= */
 const getSpecifications = catchAsync(async (req, res, next) => {
   const page = Math.max(parseInt(req.query.page) || 1, 1);
@@ -55,6 +59,10 @@ const getSpecifications = catchAsync(async (req, res, next) => {
   });
 });
 
+/**
+ * Get a single specification
+ * GET /api/specifications/:id
+ */
 /* ================= GET SPECIFICATION BY ID ================= */
 const getSpecificationById = catchAsync(async (req, res, next) => {
   const specification = await ProductSpecification.findByPk(req.params.id, {
@@ -80,6 +88,10 @@ const getSpecificationById = catchAsync(async (req, res, next) => {
   });
 });
 
+/**
+ * Get specifications by product ID
+ * GET /api/specifications/:productId
+ */
 /* ================= GET SPECIFICATIONS BY PRODUCT ID ================= */
 const getSpecificationsByProductId = catchAsync(async (req, res, next) => {
   const { productId } = req.params;
@@ -104,6 +116,10 @@ const getSpecificationsByProductId = catchAsync(async (req, res, next) => {
   });
 });
 
+/**
+ * Search specifications
+ * GET /api/specifications/search
+ */
 /* ================= SEARCH SPECIFICATIONS ================= */
 const searchSpecifications = catchAsync(async (req, res, next) => {
   const key = req.query.key?.trim();
@@ -145,6 +161,10 @@ const searchSpecifications = catchAsync(async (req, res, next) => {
    ================= ADMIN CONTROLLERS ======================
    ========================================================= */
 
+/**
+ * Create a new specification
+ * POST /api/specifications
+ */
 /* ================= CREATE SPECIFICATION ================= */
 const createSpecification = catchAsync(async (req, res, next) => {
   const { productId, material, legMaterial, weightCapacity, seatHeight, totalHeight } = req.body;
@@ -182,6 +202,10 @@ const createSpecification = catchAsync(async (req, res, next) => {
   });
 });
 
+/**
+ * Update a specification
+ * PATCH /api/specifications/:id
+ */
 /* ================= UPDATE SPECIFICATION ================= */
 const updateSpecification = catchAsync(async (req, res, next) => {
   const specification = await ProductSpecification.findByPk(req.params.id);
@@ -202,6 +226,10 @@ const updateSpecification = catchAsync(async (req, res, next) => {
   });
 });
 
+/**
+ * Delete a specification
+ * DELETE /api/specifications/:id
+ */
 /* ================= DELETE SPECIFICATION ================= */
 const deleteSpecification = catchAsync(async (req, res, next) => {
   const specification = await ProductSpecification.findByPk(req.params.id);

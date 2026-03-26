@@ -93,7 +93,7 @@ const getReviews = catchAsync(async (req, res, next) => {
     include: [
       {
         model: User,
-        as: "user",
+        as: "reviewUser",
         attributes: ["id", "name"]
       }
     ],

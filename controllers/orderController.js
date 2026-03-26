@@ -1,10 +1,19 @@
-const { Order, OrderItem, Cart, CartItem, ShippingAddress, Product, User, ProductVariant } = require('../models');
+const { Order, OrderItem, Cart, CartItem, ShippingAddress, Product, User, ProductVariant, sequelize } = require('../models');
 const AppError = require('../utils/AppError');
 const catchAsync = require('../utils/catchAsync');
-const { Op, sequelize } = require('sequelize');
+const { Op } = require('sequelize');
+const crypto = require('crypto');
+const Razorpay = require('razorpay');
+
+// Initialize Razorpay
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID || 'dummy_key_id',
+  key_secret: process.env.RAZORPAY_KEY_SECRET || 'dummy_key_secret',
+});
+
 
 /**
- * Get all orders for user
+ * Get all orders for a user
  * GET /api/orders
  */
 const getOrders = catchAsync(async (req, res, next) => {
@@ -62,8 +71,8 @@ const getOrders = catchAsync(async (req, res, next) => {
 });
 
 /**
- * Get single order by ID
- * GET /api/orders/:orderId
+ * Get a single order
+ * GET /api/orders/:id
  */
 const getOrder = catchAsync(async (req, res, next) => {
   const { orderId } = req.params;
@@ -117,8 +126,8 @@ const getOrder = catchAsync(async (req, res, next) => {
 });
 
 /**
- * Place order (from cart)
- * POST /api/orders/place
+ * Create a new order
+ * POST /api/orders
  */
 const placeOrder = catchAsync(async (req, res, next) => {
   const userId = req.user.id;
@@ -283,6 +292,29 @@ const placeOrder = catchAsync(async (req, res, next) => {
     // Commit transaction
     await transaction.commit();
 
+    let razorpayOrderId = null;
+    let razorpayAmount = null;
+
+    // Create Razorpay order if not COD
+    if (paymentMethod !== 'cod') {
+      try {
+        const options = {
+          amount: Math.round(finalAmount * 100), // amount in the smallest currency unit (paise)
+          currency: "INR",
+          receipt: order.id.toString(),
+        };
+        const rzpOrder = await razorpay.orders.create(options);
+        razorpayOrderId = rzpOrder.id;
+        razorpayAmount = rzpOrder.amount;
+        
+        // Update order with razorpay order id (storing in paymentId initially)
+        await Order.update({ paymentId: razorpayOrderId }, { where: { id: order.id } });
+      } catch (err) {
+        console.error("Razorpay Order Creation Error:", err);
+        return next(new AppError('Payment gateway error. Please try again.', 500));
+      }
+    }
+
     // Fetch complete order
     const createdOrder = await Order.findByPk(order.id, {
       include: [
@@ -308,7 +340,10 @@ const placeOrder = catchAsync(async (req, res, next) => {
       status: 'success',
       message: 'Order placed successfully',
       data: {
-        order: createdOrder
+        order: createdOrder,
+        razorpayOrderId,
+        razorpayAmount,
+        razorpayKeyId: process.env.RAZORPAY_KEY_ID
       }
     });
   } catch (error) {
@@ -318,8 +353,8 @@ const placeOrder = catchAsync(async (req, res, next) => {
 });
 
 /**
- * Update order status (admin only)
- * PATCH /api/orders/:orderId/status
+ * Update an order
+ * PATCH /api/orders/:id
  */
 const updateOrderStatus = catchAsync(async (req, res, next) => {
   const { orderId } = req.params;
@@ -391,7 +426,7 @@ const updateOrderStatus = catchAsync(async (req, res, next) => {
 
 /**
  * Update payment status
- * PATCH /api/orders/:orderId/payment-status
+ * PATCH /api/orders/:id/payment-status
  */
 const updatePaymentStatus = catchAsync(async (req, res, next) => {
   const { orderId } = req.params;
@@ -440,8 +475,8 @@ const updatePaymentStatus = catchAsync(async (req, res, next) => {
 });
 
 /**
- * Cancel order
- * POST /api/orders/:orderId/cancel
+ * Cancel an order
+ * POST /api/orders/:id/cancel
  */
 const cancelOrder = catchAsync(async (req, res, next) => {
   const { orderId } = req.params;
@@ -583,6 +618,199 @@ const getOrderAnalytics = catchAsync(async (req, res, next) => {
   });
 });
 
+/**
+ * Get all orders for a user
+ * GET /api/orders
+ */
+
+/**
+ * Get a single order
+ * GET /api/orders/:id
+ */
+
+/**
+ * Create a new order
+ * POST /api/orders
+ */
+
+/**
+ * Update an order
+ * PATCH /api/orders/:id
+ */
+
+/**
+ * Delete an order
+ * DELETE /api/orders/:id
+ */
+
+/**
+ * Buy Now (Bypass Cart)
+ * POST /api/orders/buy-now
+ */
+const buyNow = catchAsync(async (req, res, next) => {
+  const userId = req.user.id;
+  const { productId, productVariantId, quantity, shippingAddressId, paymentMethod = 'cod', notes } = req.body;
+
+  // Validation
+  if (!productId || !quantity || !shippingAddressId) {
+    return next(new AppError('Product ID, quantity, and shipping address are required', 400));
+  }
+
+  if (!['credit_card', 'debit_card', 'upi', 'net_banking', 'wallet', 'cod'].includes(paymentMethod)) {
+    return next(new AppError('Invalid payment method', 400));
+  }
+
+  // Verify shipping address
+  const shippingAddress = await ShippingAddress.findByPk(shippingAddressId);
+  if (!shippingAddress || shippingAddress.userId !== userId) {
+    return next(new AppError('Shipping address not found or invalid', 404));
+  }
+
+  // Transaction to ensure data consistency
+  const transaction = await sequelize.transaction();
+
+  try {
+    // Fetch product
+    const product = await Product.findByPk(productId, { transaction });
+    if (!product || !product.isActive) {
+      await transaction.rollback();
+      return next(new AppError('Product is no longer available', 400));
+    }
+
+    // Check stock availability
+    let currentStock = product.stock;
+    let variant = null;
+
+    if (productVariantId) {
+      variant = await ProductVariant.findByPk(productVariantId, { transaction });
+      if (!variant) {
+        await transaction.rollback();
+        return next(new AppError('Selected variant is not available', 400));
+      }
+      currentStock = variant.stock;
+    }
+
+    if (currentStock < quantity) {
+      await transaction.rollback();
+      return next(new AppError(`Insufficient stock. Available: ${currentStock}, Requested: ${quantity}`, 400));
+    }
+
+    // Determine price using variant price or base price
+    const unitPrice = variant ? parseFloat(variant.price) : parseFloat(product.price);
+    const subtotal = unitPrice * quantity;
+    const shippingCost = 50; // Fixed shipping for now
+    const taxAmount = Math.round((subtotal * 5) / 100); // 5% tax
+    const discountAmount = 0;
+    const finalAmount = subtotal + shippingCost + taxAmount - discountAmount;
+
+    // Generate unique order number
+    const orderNumber = `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+    // Create Order
+    const order = await Order.create(
+      {
+        orderNumber,
+        userId,
+        shippingAddressId,
+        totalPrice: subtotal,
+        shippingCost,
+        taxAmount,
+        discountAmount,
+        finalAmount,
+        status: 'pending',
+        paymentStatus: 'pending',
+        paymentMethod,
+        notes,
+        estimatedDeliveryDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+      },
+      { transaction }
+    );
+
+    // Create Order Item
+    await OrderItem.create(
+      {
+        orderId: order.id,
+        productId: product.id,
+        productVariantId: productVariantId || null,
+        productName: product.name,
+        quantity,
+        priceAtPurchase: unitPrice,
+        totalPrice: subtotal
+      },
+      { transaction }
+    );
+
+    // Update Stock
+    await product.update(
+      {
+        stock: product.stock - quantity,
+        soldCount: product.soldCount + quantity
+      },
+      { transaction }
+    );
+
+    if (variant) {
+      await variant.update(
+        { stock: variant.stock - quantity },
+        { transaction }
+      );
+    }
+
+    await transaction.commit();
+
+    let razorpayOrderId = null;
+    let razorpayAmount = null;
+
+    // Initialize Razorpay logic for online payments
+    if (paymentMethod !== 'cod') {
+      try {
+        const options = {
+          amount: Math.round(finalAmount * 100),
+          currency: "INR",
+          receipt: order.id.toString(),
+        };
+        const rzpOrder = await razorpay.orders.create(options);
+        razorpayOrderId = rzpOrder.id;
+        razorpayAmount = rzpOrder.amount;
+        
+        await Order.update({ paymentId: razorpayOrderId }, { where: { id: order.id } });
+      } catch (err) {
+        console.error("Razorpay Order Creation Error in Buy Now:", err);
+        return next(new AppError('Payment gateway error. Order created as pending. Please retry payment from orders.', 500));
+      }
+    }
+
+    // Fetch complete order
+    const createdOrder = await Order.findByPk(order.id, {
+      include: [
+        {
+          model: OrderItem,
+          as: 'items',
+          include: [{ model: Product, as: 'product', attributes: ['id', 'name'] }]
+        },
+        { model: ShippingAddress, as: 'shippingAddress' }
+      ]
+    });
+
+    res.status(201).json({
+      status: 'success',
+      message: 'Order placed successfully',
+      data: {
+        order: createdOrder,
+        razorpayOrderId,
+        razorpayAmount,
+        razorpayKeyId: process.env.RAZORPAY_KEY_ID
+      }
+    });
+
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+});
+
+// Removed verifyPayment
+
 module.exports = {
   getOrders,
   getOrder,
@@ -590,5 +818,6 @@ module.exports = {
   updateOrderStatus,
   updatePaymentStatus,
   cancelOrder,
-  getOrderAnalytics
+  getOrderAnalytics,
+  buyNow
 };

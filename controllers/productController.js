@@ -3,202 +3,179 @@ const {
   ProductImage,
   ProductSpecification,
   ProductVariant,
+  Category,
   sequelize
 } = require("../models");
-const Message = require('../constants/messages')
-const catchAsync = require('../utils/catchAsync');
 
+const Message = require("../constants/messages");
+const catchAsync = require("../utils/catchAsync");
 const { Op } = require("sequelize");
 
 /* ================= COMMON RESPONSE ================= */
-const sendResponse = (res, { status = 200, success = true, message = "", data = null, meta = null }) => {
-  return res.status(status).json({ success, message, data, meta });
-};
+const sendResponse = (res, {
+  status = 200,
+  success = true,
+  message = "",
+  data = null,
+  meta = null
+}) => res.status(status).json({ success, message, data, meta });
+
 
 /* =========================================================
    ================= CLIENT CONTROLLERS =====================
    ========================================================= */
 
 /* ================= GET ALL PRODUCTS ================= */
-const getProducts = catchAsync(async (req, res, next) => {
-    const page = Math.max(parseInt(req.query.page) || 1, 1);
-    const limit = Math.min(Math.max(parseInt(req.query.limit) || 10, 1), 50);
+const getProducts = catchAsync(async (req, res) => {
+  const page = Math.max(parseInt(req.query.page) || 1, 1);
+  const limit = Math.min(Math.max(parseInt(req.query.limit) || 10, 1), 50);
+  const offset = (page - 1) * limit;
 
-    const where = { isActive: true };
+  // Base filter
+  const where = { isActive: true };
 
-    if (req.query.category) {
-      where.category = req.query.category;
-    }
+  // Search filter
+  if (req.query.search) {
+    const key = req.query.search.trim();
+    where[Op.or] = [
+      { name: { [Op.iLike]: `%${key}%` } },
+      { description: { [Op.iLike]: `%${key}%` } }
+    ];
+  }
 
-    if (req.query.search) {
-      const key = req.query.search.trim();
-      where[Op.or] = [
-        { name: { [Op.iLike]: `%${key}%` } },
-        { description: { [Op.iLike]: `%${key}%` } }
-      ];
-    }
+  // Price filter
+  if (req.query.minPrice || req.query.maxPrice) {
+    where.price = {};
+    if (req.query.minPrice) where.price[Op.gte] = req.query.minPrice;
+    if (req.query.maxPrice) where.price[Op.lte] = req.query.maxPrice;
+  }
 
-    const total = await Product.count({ where });
-    const totalPages = Math.ceil(total / limit) || 1;
-
-    if (page > totalPages) {
-      return sendResponse(res, { status: 400, success: false, message:Message.ERROR.PAGE_NOT_FOUND });
-    }
-
-    const products = await Product.findAll({
-      where,
-      include: ["images", "specifications", "variants"],
-      limit,
-      offset: (page - 1) * limit,
-      order: [["createdAt", "DESC"]]
+  // Category filter using association
+  const include = [
+    { association: "images", attributes: ["id", "imageUrl"] }
+  ];
+  if (req.query.category) {
+    include.push({
+      model: Category,
+      as: "productCategory",
+      where: { name: req.query.category },
+      attributes: ["id", "name"]
     });
+  }
 
+  const total = await Product.count({ where });
+  const totalPages = Math.ceil(total / limit) || 1;
+
+  if (page > totalPages) {
     return sendResponse(res, {
-      message: "Products fetched successfully",
-      meta: { total, page, limit, totalPages },
-      data: products
+      status: 400,
+      success: false,
+      message: Message.ERROR.PAGE_NOT_FOUND
     });
+  }
+
+  const products = await Product.findAll({
+    where,
+    limit,
+    offset,
+    order: [["createdAt", "DESC"]],
+    include
   });
 
-
-/* ================= GET SINGLE PRODUCT ================= */
-const getProductById = catchAsync(async (req, res, next) => {
-    const product = await Product.findByPk(req.params.id, {
-      include: ["images", "specifications", "variants"]
-    });
-
-    if (!product || !product.isActive) {
-      return sendResponse(res, { status: 404, success: false, message: "Product not found" });
-    }
-
-    return sendResponse(res, { message: "Product fetched successfully", data: product });
+  return sendResponse(res, {
+    message: Message.SUCCESS.PRODUCTS_FETCHED,
+    data: products,
+    meta: { total, page, limit, totalPages }
   });
+});
+
+
+/* ================= GET PRODUCT BY ID ================= */
+const getProductById = catchAsync(async (req, res) => {
+  const product = await Product.findByPk(req.params.id, {
+    include: ["images", "specifications", "variants", { model: Category, as: "productCategory" }]
+  });
+
+  if (!product || !product.isActive) {
+    return sendResponse(res, {
+      status: 404,
+      success: false,
+      message: Message.ERROR.PRODUCT_NOT_FOUND
+    });
+  }
+
+  return sendResponse(res, {
+    message: Message.SUCCESS.PRODUCT_FETCHED,
+    data: product
+  });
+});
 
 /* ================= SEARCH PRODUCTS ================= */
-const searchProducts = catchAsync(async (req, res, next) => {
-    const key = req.query.key?.trim();
+const searchProducts = catchAsync(async (req, res) => {
+  const key = req.query.key.trim();
+  const page = Math.max(parseInt(req.query.page) || 1, 1);
+  const limit = Math.min(Math.max(parseInt(req.query.limit) || 10, 1), 50);
+  const offset = (page - 1) * limit;
 
-    if (!key) {
-      return sendResponse(res, {
-        status: 400,
-        success: false,
-        message: "Search key is required"
-      });
-    }
+  const where = {
+    isActive: true,
+    [Op.or]: [
+      { name: { [Op.iLike]: `%${key}%` } },
+      { description: { [Op.iLike]: `%${key}%` } }
+    ]
+  };
 
-    const { count, rows } = await Product.findAndCountAll({
-      where: {
-        isActive: true,
-        [Op.or]: [
-          { name: { [Op.iLike]: `%${key}%` } },
-          { description: { [Op.iLike]: `%${key}%` } }
-        ]
-      },
-      include: ["images"]
-    });
+  const total = await Product.count({ where });
+  const totalPages = Math.ceil(total / limit) || 1;
 
-    return sendResponse(res, {
-      message: count ? "Search results fetched" : "No products found",
-      data: rows,
-      meta: { total: count }
-    });
+  const products = await Product.findAll({
+    where,
+    limit,
+    offset,
+    include: [{ association: "images", attributes: ["id", "imageUrl"] }]
   });
 
-/* ================= RELATED PRODUCTS ================= */
-const getRelatedProducts = catchAsync(async (req, res, next) => {
-    const { id } = req.params;
+  return sendResponse(res, {
+    message: Message.SUCCESS.PRODUCTS_FETCHED || "Products retrieved",
+    data: products,
+    meta: { total, page, limit, totalPages }
+  });
+});
 
-    // 1️⃣ Get current product
-    const product = await Product.findByPk(id);
+/* ================= GET RELATED PRODUCTS ================= */
+const getRelatedProducts = catchAsync(async (req, res) => {
+  const product = await Product.findByPk(req.params.id);
+  
+  if (!product) {
+    return sendResponse(res, { status: 404, success: false, message: Message.ERROR.PRODUCT_NOT_FOUND });
+  }
 
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found"
-      });
-    }
-
-    // 2️⃣ Smart category + price based recommendation
-    let related = await Product.findAll({
-      where: {
-        category: { [Op.iLike]: product.category }, // case-insensitive
-        id: { [Op.ne]: product.id }, // exclude current product
-        price: {
-          [Op.between]: [
-            product.price * 0.7,
-            product.price * 1.3
-          ]
-        },
-        isActive: true
-      },
-      include: ["images"],
-      limit: 10,
-      order: [["createdAt", "DESC"]]
-    });
-
-    // 3️⃣ Fallback → Trending products (if no match)
-    if (!related.length) {
-      related = await Product.findAll({
-        where: {
-          id: { [Op.ne]: product.id },
-          isActive: true
-        },
-        include: ["images"],
-        order: [["soldCount", "DESC"]], // 👈 trending logic
-        limit: 10
-      });
-    }
-
-    // 4️⃣ Final fallback → latest products
-    if (!related.length) {
-      related = await Product.findAll({
-        where: {
-          id: { [Op.ne]: product.id },
-          isActive: true
-        },
-        include: ["images"],
-        order: [["createdAt", "DESC"]],
-        limit: 10
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: "Smart recommendations fetched",
-      data: related
-    });
+  const related = await Product.findAll({
+    where: {
+      categoryId: product.categoryId,
+      id: { [Op.ne]: product.id },
+      isActive: true
+    },
+    limit: 5,
+    include: [{ association: "images", attributes: ["id", "imageUrl"] }]
   });
 
-/* ================= FULL PRODUCT DETAILS ================= */
-const getFullProductDetails = catchAsync(async (req, res, next) => {
-    const product = await Product.findByPk(req.params.id, {
-      include: ["images", "specifications", "variants"]
-    });
-
-    if (!product) {
-      return sendResponse(res, {
-        status: 404,
-        success: false,
-        message: "Product not found"
-      });
-    }
-
-    return sendResponse(res, {
-      message: "Full product details fetched",
-      data: product
-    });
+  return sendResponse(res, {
+    message: "Related products fetched",
+    data: related
   });
+});
+
+/* ================= GET FULL PRODUCT DETAILS ================= */
+// Identical to getProductById but explicitly exported to fix router crash
+const getFullProductDetails = getProductById;
 
 
-
-
-/* =========================================================
-   ================= ADMIN CONTROLLERS ======================
-   ========================================================= */
 
 /* ================= CREATE PRODUCT ================= */
-const createProduct = catchAsync(async (req, res, next) => {
-  const t = await sequelize.transaction();
+/* ================= CREATE PRODUCT ================= */
+const createProduct = catchAsync(async (req, res) => {
+  const transaction = await sequelize.transaction();
 
   try {
     const {
@@ -206,98 +183,126 @@ const createProduct = catchAsync(async (req, res, next) => {
       description,
       originalPrice,
       discountPercentage = 0,
-      category,
+      category, // string name of category
       stock = 0,
       images = [],
       specifications = {},
       variants = []
     } = req.body;
 
-    if (!name || !category) throw new Error("Name & category required");
+    if (!name || !category) throw new Error("Name and category are required");
+    if (!originalPrice || originalPrice <= 0) throw new Error("Invalid original price");
+    if (discountPercentage < 0 || discountPercentage > 90) throw new Error("Invalid discount percentage");
 
-    if (!originalPrice || originalPrice <= 0) {
-      throw new Error("Invalid price");
-     }
+    // --- Find or Create Category ---
+    let categoryRecord = await Category.findOne({ where: { name: category.toLowerCase().trim() } });
 
-    if (discountPercentage < 0 || discountPercentage > 90) {
-      throw new Error("Invalid discount");
+    if (!categoryRecord) {
+      categoryRecord = await Category.create(
+        { name: category.toLowerCase().trim(), slug: category.toLowerCase().trim() },
+        { transaction }
+      );
     }
 
     const finalPrice = originalPrice - (originalPrice * discountPercentage) / 100;
 
-    const product = await Product.create(
-      { name, description, originalPrice, discountPercentage, price: finalPrice, category, stock },
-      { transaction: t }
-    );
+    // --- Create Product ---
+    const product = await Product.create({
+      name,
+      description,
+      originalPrice,
+      discountPercentage,
+      price: finalPrice,
+      discountPrice: finalPrice,
+      categoryId: categoryRecord.id,
+      stock
+    }, { transaction });
 
+    // --- Images ---
     if (images.length) {
       await ProductImage.bulkCreate(
         images.map(img => ({ productId: product.id, imageUrl: img })),
-        { transaction: t }
+        { transaction }
       );
     }
 
+    // --- Specifications ---
     if (Object.keys(specifications).length) {
-      await ProductSpecification.create(
-        { productId: product.id, ...specifications },
-        { transaction: t }
-      );
+      await ProductSpecification.create({ productId: product.id, ...specifications }, { transaction });
     }
 
+    // --- Variants ---
     if (variants.length) {
       await ProductVariant.bulkCreate(
-        variants.map(v => ({
-          productId: product.id,
-          color: v.color,
-          stock: v.stock,
-          price: v.price
-        })),
-        { transaction: t }
+        variants.map(v => ({ productId: product.id, color: v.color, price: v.price, stock: v.stock })),
+        { transaction }
       );
     }
 
-    await t.commit();
+    await transaction.commit();
 
-    return sendResponse(res, { status: 201, message: "Product created", data: product });
-  } catch (err) {
-    await t.rollback();
-    throw err;
+    // --- Fetch Full Product with Associations ---
+    const fullProduct = await Product.findByPk(product.id, {
+      include: ["images", "specifications", "variants", { model: Category, as: "productCategory" }]
+    });
+
+    return sendResponse(res, {
+      status: 201,
+      message: "Product created successfully",
+      data: fullProduct
+    });
+
+  } catch (error) {
+    await transaction.rollback();
+    return sendResponse(res, { status: 400, success: false, message: error.message });
   }
 });
 
+
 /* ================= UPDATE PRODUCT ================= */
-const updateProduct = catchAsync(async (req, res, next) => {
-    const product = await Product.findByPk(req.params.id);
+const updateProduct = catchAsync(async (req, res) => {
+  const product = await Product.findByPk(req.params.id);
 
-    if (!product) {
-      return sendResponse(res, { status: 404, success: false, message: "Product not found" });
-    }
+  if (!product) return sendResponse(res, { status: 404, success: false, message: Message.ERROR.PRODUCT_NOT_FOUND });
 
-    await product.update(req.body);
+  const { originalPrice, discountPercentage } = req.body;
+  if (originalPrice || discountPercentage !== undefined) {
+    const price = originalPrice || product.originalPrice;
+    const discount = discountPercentage ?? product.discountPercentage;
+    const finalPrice = price - (price * discount) / 100;
+    req.body.price = finalPrice;
+    req.body.discountPrice = finalPrice;
+  }
 
-    return sendResponse(res, { message: "Product updated", data: product });
+  await product.update(req.body);
+
+  return sendResponse(res, {
+    message: "Product updated successfully",
+    data: product
   });
+});
+
 
 /* ================= DELETE PRODUCT ================= */
-const deleteProduct = catchAsync(async (req, res, next) => {
-    const product = await Product.findByPk(req.params.id);
+const deleteProduct = catchAsync(async (req, res) => {
+  const product = await Product.findByPk(req.params.id);
 
-    if (!product) {
-      return sendResponse(res, { status: 404, success: false, message: "Product not found" });
-    }
+  if (!product) return sendResponse(res, { status: 404, success: false, message: Message.ERROR.PRODUCT_NOT_FOUND });
 
-      await product.update({ isActive: false });
+  await product.update({ isActive: false });
 
-    return sendResponse(res, { message: "Product deleted" });
-  });
+  return sendResponse(res, { message: "Product deleted successfully" });
+});
 
+
+/* ================= EXPORT ================= */
 module.exports = {
   getProducts,
   getProductById,
   searchProducts,
   getRelatedProducts,
+  getFullProductDetails,
   createProduct,
   updateProduct,
-  deleteProduct,
-  getFullProductDetails
+  deleteProduct
 };

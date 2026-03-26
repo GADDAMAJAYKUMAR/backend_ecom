@@ -3,6 +3,31 @@ const { Op } = require("sequelize");
 const messages = require('../constants/messages');
 const catchAsync = require('../utils/catchAsync');
 
+/**
+ * Get all product variants
+ * GET /api/product-variants
+ */
+
+/**
+ * Get a single product variant
+ * GET /api/product-variants/:id
+ */
+
+/**
+ * Create a new product variant
+ * POST /api/product-variants
+ */
+
+/**
+ * Update a product variant
+ * PATCH /api/product-variants/:id
+ */
+
+/**
+ * Delete a product variant
+ * DELETE /api/product-variants/:id
+ */
+
 // ================= GET VARIANTS BY PRODUCT ID =================
 const getVariantsByProduct = catchAsync(async (req, res, next) => {
     const { productId } = req.params;
