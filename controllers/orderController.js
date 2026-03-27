@@ -1,15 +1,8 @@
-const { Order, OrderItem, Cart, CartItem, ShippingAddress, Product, User, ProductVariant, sequelize } = require('../models');
+const { Order, OrderItem, Cart, CartItem, ShippingAddress, Product, User, ProductVariant, Coupon, CouponUsage, sequelize } = require('../models');
 const AppError = require('../utils/AppError');
 const catchAsync = require('../utils/catchAsync');
 const { Op } = require('sequelize');
 const crypto = require('crypto');
-const Razorpay = require('razorpay');
-
-// Initialize Razorpay
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID || 'dummy_key_id',
-  key_secret: process.env.RAZORPAY_KEY_SECRET || 'dummy_key_secret',
-});
 
 
 /**
@@ -159,6 +152,10 @@ const placeOrder = catchAsync(async (req, res, next) => {
             as: 'variant'
           }
         ]
+      },
+      {
+        model: Coupon,
+        as: 'appliedCoupon'
       }
     ]
   });
@@ -222,10 +219,25 @@ const placeOrder = catchAsync(async (req, res, next) => {
 
     // Calculate order totals
     const subtotal = parseFloat(cart.totalPrice);
-    const shippingCost = 50; // Fixed shipping cost (can be dynamic based on location)
+    const shippingCost = 50; // Fixed shipping cost
     const taxAmount = Math.round((subtotal * 5) / 100); // 5% tax
-    const discountAmount = 0; // Can be implemented based on coupons
-    const finalAmount = subtotal + shippingCost + taxAmount - discountAmount;
+    
+    // Calculate coupon discount
+    let couponDiscount = 0;
+    if (cart.appliedCoupon) {
+      const coupon = cart.appliedCoupon;
+      if (coupon.type === 'percentage') {
+        couponDiscount = (subtotal * parseFloat(coupon.value)) / 100;
+        if (coupon.maxDiscountAmount && couponDiscount > parseFloat(coupon.maxDiscountAmount)) {
+          couponDiscount = parseFloat(coupon.maxDiscountAmount);
+        }
+      } else if (coupon.type === 'fixed') {
+        couponDiscount = parseFloat(coupon.value);
+      }
+      couponDiscount = Math.min(couponDiscount, subtotal);
+    }
+
+    const finalAmount = subtotal + shippingCost + taxAmount - couponDiscount;
 
     // Generate order number (unique)
     const orderNumber = `ORD-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -239,12 +251,13 @@ const placeOrder = catchAsync(async (req, res, next) => {
         totalPrice: subtotal,
         shippingCost,
         taxAmount,
-        discountAmount,
+        discountAmount: couponDiscount,
         finalAmount,
         status: 'pending',
         paymentStatus: paymentMethod === 'cod' ? 'pending' : 'pending',
         paymentMethod,
         notes,
+        couponId: cart.appliedCoupon ? cart.appliedCoupon.id : null,
         estimatedDeliveryDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days from now
       },
       { transaction }
@@ -285,35 +298,25 @@ const placeOrder = catchAsync(async (req, res, next) => {
     // Clear cart
     await CartItem.destroy({ where: { cartId: cart.id } }, { transaction });
     await cart.update(
-      { totalItems: 0, totalPrice: 0 },
+      { totalItems: 0, totalPrice: 0, couponId: null },
       { transaction }
     );
 
+    // Record coupon usage
+    if (cart.appliedCoupon) {
+      await CouponUsage.create({
+        userId,
+        couponId: cart.appliedCoupon.id,
+        orderId: order.id,
+        discountAmount: couponDiscount,
+        usedAt: new Date()
+      }, { transaction });
+
+      await cart.appliedCoupon.increment('usedCount', { by: 1, transaction });
+    }
+
     // Commit transaction
     await transaction.commit();
-
-    let razorpayOrderId = null;
-    let razorpayAmount = null;
-
-    // Create Razorpay order if not COD
-    if (paymentMethod !== 'cod') {
-      try {
-        const options = {
-          amount: Math.round(finalAmount * 100), // amount in the smallest currency unit (paise)
-          currency: "INR",
-          receipt: order.id.toString(),
-        };
-        const rzpOrder = await razorpay.orders.create(options);
-        razorpayOrderId = rzpOrder.id;
-        razorpayAmount = rzpOrder.amount;
-        
-        // Update order with razorpay order id (storing in paymentId initially)
-        await Order.update({ paymentId: razorpayOrderId }, { where: { id: order.id } });
-      } catch (err) {
-        console.error("Razorpay Order Creation Error:", err);
-        return next(new AppError('Payment gateway error. Please try again.', 500));
-      }
-    }
 
     // Fetch complete order
     const createdOrder = await Order.findByPk(order.id, {
@@ -340,10 +343,7 @@ const placeOrder = catchAsync(async (req, res, next) => {
       status: 'success',
       message: 'Order placed successfully',
       data: {
-        order: createdOrder,
-        razorpayOrderId,
-        razorpayAmount,
-        razorpayKeyId: process.env.RAZORPAY_KEY_ID
+        order: createdOrder
       }
     });
   } catch (error) {
@@ -758,28 +758,6 @@ const buyNow = catchAsync(async (req, res, next) => {
 
     await transaction.commit();
 
-    let razorpayOrderId = null;
-    let razorpayAmount = null;
-
-    // Initialize Razorpay logic for online payments
-    if (paymentMethod !== 'cod') {
-      try {
-        const options = {
-          amount: Math.round(finalAmount * 100),
-          currency: "INR",
-          receipt: order.id.toString(),
-        };
-        const rzpOrder = await razorpay.orders.create(options);
-        razorpayOrderId = rzpOrder.id;
-        razorpayAmount = rzpOrder.amount;
-        
-        await Order.update({ paymentId: razorpayOrderId }, { where: { id: order.id } });
-      } catch (err) {
-        console.error("Razorpay Order Creation Error in Buy Now:", err);
-        return next(new AppError('Payment gateway error. Order created as pending. Please retry payment from orders.', 500));
-      }
-    }
-
     // Fetch complete order
     const createdOrder = await Order.findByPk(order.id, {
       include: [
@@ -796,10 +774,7 @@ const buyNow = catchAsync(async (req, res, next) => {
       status: 'success',
       message: 'Order placed successfully',
       data: {
-        order: createdOrder,
-        razorpayOrderId,
-        razorpayAmount,
-        razorpayKeyId: process.env.RAZORPAY_KEY_ID
+        order: createdOrder
       }
     });
 

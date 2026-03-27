@@ -15,7 +15,7 @@ const Question = sequelize.define("Question", {
 
 
 Question.belongsTo(User, { foreignKey: "userId", as: "askingUser" });
-Question.belongsTo(User, { foreignKey: "answeredBy", as: "answeringUser" });
+Question.belongsTo(User, { foreignKey: "answeredBy", as: "answeringAdmin" });
 Question.belongsTo(Product, { foreignKey: "productId", as: "relatedProduct" });
 
 module.exports = Question;

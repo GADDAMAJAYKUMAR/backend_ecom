@@ -42,7 +42,9 @@ router.use('/cart',CartRoutes)
 router.use('/categorie',CategorieRoutes)
 
 const paymentRoutes = require('./paymentRoutes');
+const couponRoutes = require('./couponRoutes');
 
 router.use('/payment', paymentRoutes);
+router.use('/coupons', couponRoutes);
 
 module.exports = router;

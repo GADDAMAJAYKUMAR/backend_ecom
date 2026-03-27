@@ -64,7 +64,7 @@ const answerQuestion = async (req, res, next) => {
     const updatedQuestion = await Question.findByPk(questionId, {
       include: [
         { model: User, as: "askingUser", attributes: ["id", "name"] },
-        { model: User, as: "answeringUser", attributes: ["id", "name"] }
+        { model: User, as: "answeringAdmin", attributes: ["id", "name"] }
       ]
     });
     return sendResponse(res, { message: "Answer added/updated", data: updatedQuestion });
@@ -85,7 +85,7 @@ const getProductQuestions = async (req, res, next) => {
       where: { productId },
       include: [
         { model: User, as: "askingUser", attributes: ["id", "name"] },
-        { model: User, as: "answeringUser", attributes: ["id", "name"] }
+        { model: User, as: "answeringAdmin", attributes: ["id", "name"] }
       ],
       limit, offset,
       order: [["createdAt", "DESC"]]
@@ -96,7 +96,7 @@ const getProductQuestions = async (req, res, next) => {
       question: q.question,
       answer: q.answer,
       askedBy: q.askingUser,
-      answeredBy: q.answeringUser || null,
+      answeredBy: q.answeringAdmin || null,
       createdAt: q.createdAt,
       updatedAt: q.updatedAt
     }));

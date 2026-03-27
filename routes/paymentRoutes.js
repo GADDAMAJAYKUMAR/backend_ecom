@@ -6,7 +6,10 @@ const { validate } = require('../middleware/validation.middleware');
 
 const router = express.Router();
 
-// All payment routes require authentication
+// Webhook route (No authentication required, verification via signature)
+router.post('/webhook', paymentController.handleWebhook);
+
+// All other payment routes require authentication
 router.use(protect);
 
 // Validation middleware
@@ -17,12 +20,14 @@ const verifyPaymentValidation = [
   body('orderId').notEmpty().isUUID().withMessage('Valid order ID is required')
 ];
 
-const retryPaymentValidation = [
+const initiatePaymentValidation = [
   body('orderId').notEmpty().isUUID().withMessage('Valid order ID is required')
 ];
 
 // Routes
+router.post('/initiate', initiatePaymentValidation, validate, paymentController.initiatePayment);
 router.post('/verify', verifyPaymentValidation, validate, paymentController.verifyPayment);
-router.post('/retry', retryPaymentValidation, validate, paymentController.retryPayment);
+router.post('/retry', initiatePaymentValidation, validate, paymentController.retryPayment);
+router.post('/mock-success', initiatePaymentValidation, validate, paymentController.mockPaymentSuccess);
 
 module.exports = router;

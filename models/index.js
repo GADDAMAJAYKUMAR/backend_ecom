@@ -21,6 +21,8 @@ const CartItem = require("./CartItem");
 const Order = require("./Order");
 const OrderItem = require("./OrderItem");
 const ShippingAddress = require("./ShippingAddress");
+const Coupon = require("./Coupon");
+const CouponUsage = require("./CouponUsage");
 
 // Initialize models object
 const models = {
@@ -38,7 +40,9 @@ const models = {
   CartItem,
   Order,
   OrderItem,
-  ShippingAddress
+  ShippingAddress,
+  Coupon,
+  CouponUsage
 };
 
 /* ================= RELATIONSHIPS ================= */
@@ -208,6 +212,27 @@ ShippingAddress.hasMany(Order, { foreignKey: "shippingAddressId", as: "orders" }
 // User → ShippingAddress
 User.hasMany(ShippingAddress, { foreignKey: "userId", as: "shippingAddresses" });
 ShippingAddress.belongsTo(User, { foreignKey: "userId", as: "user" });
+
+
+/* ================= COUPON RELATIONS ================= */
+
+// Coupon → Cart
+Coupon.hasMany(Cart, { foreignKey: "couponId", as: "carts" });
+Cart.belongsTo(Coupon, { foreignKey: "couponId", as: "appliedCoupon" });
+
+// Coupon → Order
+Coupon.hasMany(Order, { foreignKey: "couponId", as: "orders" });
+Order.belongsTo(Coupon, { foreignKey: "couponId", as: "appliedCoupon" });
+
+// Coupon Usage
+User.hasMany(CouponUsage, { foreignKey: "userId", as: "couponUsages" });
+CouponUsage.belongsTo(User, { foreignKey: "userId", as: "user" });
+
+Coupon.hasMany(CouponUsage, { foreignKey: "couponId", as: "usages" });
+CouponUsage.belongsTo(Coupon, { foreignKey: "couponId", as: "coupon" });
+
+Order.hasOne(CouponUsage, { foreignKey: "orderId", as: "couponUsage" });
+CouponUsage.belongsTo(Order, { foreignKey: "orderId", as: "order" });
 
 
 module.exports = models;
