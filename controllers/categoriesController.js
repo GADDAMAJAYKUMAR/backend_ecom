@@ -87,6 +87,8 @@ const createCategory = catchAsync(async (req, res) => {
  */
 const updateCategory = catchAsync(async (req, res) => {
   const { id } = req.params;
+  const { name, description, image } = req.body;
+
   const category = await Category.findByPk(id);
 
   if (!category) {
@@ -97,7 +99,12 @@ const updateCategory = catchAsync(async (req, res) => {
     });
   }
 
-  await category.update(req.body);
+  await category.update({
+    name: name ?? category.name,
+    description: description ?? category.description,
+    image: image ?? category.image,
+  });
+
   return sendResponse(res, {
     message: "Category updated successfully",
     data: category,

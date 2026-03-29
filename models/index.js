@@ -9,6 +9,7 @@ const Product = require("./product/Product");
 const ProductVariant = require("./product/ProductVariant");
 const ProductImage = require("./product/ProductImage");
 const ProductSpecification = require("./product/ProductSpecification");
+const ProductDetails = require("./product/ProductDetails");
 
 // Other models
 const Question = require("./Question");
@@ -33,6 +34,7 @@ const models = {
   ProductVariant,
   ProductImage,
   ProductSpecification,
+  ProductDetails,
   Question,
   Review,
   Wishlist,
@@ -75,6 +77,19 @@ Product.hasOne(ProductSpecification, {
 ProductSpecification.belongsTo(Product, {
   foreignKey: "productId",
   as: "specProduct"
+});
+
+
+// Product → Details
+Product.hasOne(ProductDetails, {
+  foreignKey: "productId",
+  as: "details",
+  onDelete: "CASCADE"
+});
+
+ProductDetails.belongsTo(Product, {
+  foreignKey: "productId",
+  as: "detailProduct"
 });
 
 

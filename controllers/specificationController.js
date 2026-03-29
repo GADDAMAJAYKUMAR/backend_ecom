@@ -1,4 +1,4 @@
-const { ProductSpecification, Product } = require("../models");
+const { ProductSpecification, Product, sequelize } = require("../models");
 const catchAsync = require("../utils/catchAsync");
 const Message = require("../constants/messages");
 const { Op } = require("sequelize");
@@ -135,11 +135,10 @@ const searchSpecifications = catchAsync(async (req, res, next) => {
   const { count, rows } = await ProductSpecification.findAndCountAll({
     where: {
       [Op.or]: [
-        { material: { [Op.iLike]: `%${key}%` } },
-        { legMaterial: { [Op.iLike]: `%${key}%` } },
-        { weightCapacity: { [Op.iLike]: `%${key}%` } },
-        { seatHeight: { [Op.iLike]: `%${key}%` } },
-        { totalHeight: { [Op.iLike]: `%${key}%` } }
+        sequelize.where(
+          sequelize.cast(sequelize.col("specifications"), "text"),
+          { [Op.iLike]: `%${key}%` }
+        )
       ]
     },
     include: [
@@ -167,7 +166,7 @@ const searchSpecifications = catchAsync(async (req, res, next) => {
  */
 /* ================= CREATE SPECIFICATION ================= */
 const createSpecification = catchAsync(async (req, res, next) => {
-  const { productId, material, legMaterial, weightCapacity, seatHeight, totalHeight } = req.body;
+  const { productId, specifications } = req.body;
 
   if (!productId) {
     return sendResponse(res, {
@@ -188,11 +187,7 @@ const createSpecification = catchAsync(async (req, res, next) => {
 
   const specification = await ProductSpecification.create({
     productId,
-    material,
-    legMaterial,
-    weightCapacity,
-    seatHeight,
-    totalHeight
+    specifications: specifications || {}
   });
 
   return sendResponse(res, {

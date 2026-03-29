@@ -39,7 +39,7 @@ router.use('/qa', QuestionsRoutes);
 router.use('/orders', OrderRoutes);
 router.use('/shipping', ShippingRoutes);
 router.use('/cart',CartRoutes)
-router.use('/categorie',CategorieRoutes)
+router.use('/categories',CategorieRoutes)
 
 const paymentRoutes = require('./paymentRoutes');
 const couponRoutes = require('./couponRoutes');
