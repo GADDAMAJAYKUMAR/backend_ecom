@@ -28,6 +28,5 @@ const initiatePaymentValidation = [
 router.post('/initiate', initiatePaymentValidation, validate, paymentController.initiatePayment);
 router.post('/verify', verifyPaymentValidation, validate, paymentController.verifyPayment);
 router.post('/retry', initiatePaymentValidation, validate, paymentController.retryPayment);
-router.post('/mock-success', initiatePaymentValidation, validate, paymentController.mockPaymentSuccess);
 
 module.exports = router;

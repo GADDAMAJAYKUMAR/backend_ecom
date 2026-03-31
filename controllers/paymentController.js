@@ -6,8 +6,8 @@ const Razorpay = require('razorpay');
 
 // Initialize Razorpay
 const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID || 'dummy_key_id',
-  key_secret: process.env.RAZORPAY_KEY_SECRET || 'dummy_key_secret',
+  key_id: process.env.RAZORPAY_KEY_ID,
+  key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
 /**
@@ -29,7 +29,7 @@ const verifyPayment = catchAsync(async (req, res, next) => {
   // Create expected signature
   const body = razorpay_order_id + "|" + razorpay_payment_id;
   const expectedSignature = crypto
-    .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET || 'dummy_key_secret')
+    .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
     .update(body.toString())
     .digest("hex");
 
@@ -154,22 +154,6 @@ const initiatePayment = catchAsync(async (req, res, next) => {
   }
 
   try {
-    // MOCK MODE (no Razorpay keys)
-     if (!process.env.RAZORPAY_KEY_ID || 
-         process.env.RAZORPAY_KEY_ID === "dummy_key_id" || 
-         process.env.RAZORPAY_KEY_ID === "your_razorpay_key_id") {
-    return res.status(200).json({
-      status: "success",
-      message: "Mock payment initiated (development mode)",
-      data: {
-        orderId: order.id,
-        amount: order.finalAmount,
-        currency: "INR",
-        paymentGateway: "mock"
-      }
-    });
-  }
-  
   // REAL RAZORPAY
     const options = {
       amount: Math.round(order.finalAmount * 100), // amount in paise
@@ -209,7 +193,7 @@ const initiatePayment = catchAsync(async (req, res, next) => {
  * POST /api/payment/webhook
  */
 const handleWebhook = catchAsync(async (req, res, next) => {
-  const secret = process.env.RAZORPAY_WEBHOOK_SECRET || 'dummy_webhook_secret';
+  const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
   
   // Razorpay sends signature in 'x-razorpay-signature' header
   const signature = req.headers['x-razorpay-signature'];
@@ -260,36 +244,10 @@ const handleWebhook = catchAsync(async (req, res, next) => {
   res.status(200).json({ status: 'ok' });
 });
 
-/**
- * Mock Payment Success (For Testing)
- * POST /api/payment/mock-success
- */
-const mockPaymentSuccess = catchAsync(async (req, res, next) => {
-  const { orderId } = req.body;
-
-  const order = await Order.findByPk(orderId);
-
-  if (!order) {
-    return next(new AppError("Order not found", 404));
-  }
-
-  await order.update({
-    paymentStatus: "completed",
-    status: "confirmed",
-    paymentId: "mock_payment_" + Date.now()
-  });
-
-  res.json({
-    status: "success",
-    message: "Mock payment successful",
-    data: order
-  });
-});
 
 module.exports = {
   verifyPayment,
   retryPayment,
   initiatePayment,
-  handleWebhook,
-  mockPaymentSuccess
+  handleWebhook
 };

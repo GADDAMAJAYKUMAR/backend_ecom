@@ -9,7 +9,7 @@ const { sequelize } = require('../config/sequelize');
  */
 const calculateDiscount = (cart) => {
   if (!cart.appliedCoupon) return 0;
-  
+
   const coupon = cart.appliedCoupon;
   const subtotal = parseFloat(cart.totalPrice);
   let discount = 0;
@@ -44,12 +44,12 @@ const getCart = catchAsync(async (req, res, next) => {
           {
             model: Product,
             as: 'product',
-            attributes: ['id', 'name', 'price', 'stock', 'originalPrice', 'discountPercentage','image']
+            attributes: ['id', 'name', 'price', 'stock', 'originalPrice', 'discountPercentage', 'image']
           },
           {
             model: ProductVariant,
             as: 'variant',
-            attributes: ['id', 'color', 'price', 'stock','size']
+            attributes: ['id', 'color', 'price', 'stock', 'size']
           }
         ]
       },
@@ -136,7 +136,7 @@ const addToCart = catchAsync(async (req, res, next) => {
 
   if (existingCartItem) {
     const newQuantity = existingCartItem.quantity + quantity;
-    
+
     // Check if new quantity exceeds stock
     if (productVariantId) {
       const variant = await ProductVariant.findByPk(productVariantId);
