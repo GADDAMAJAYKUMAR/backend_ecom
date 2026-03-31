@@ -44,12 +44,12 @@ const getCart = catchAsync(async (req, res, next) => {
           {
             model: Product,
             as: 'product',
-            attributes: ['id', 'name', 'price', 'stock', 'originalPrice', 'discountPercentage']
+            attributes: ['id', 'name', 'price', 'stock', 'originalPrice', 'discountPercentage','image']
           },
           {
             model: ProductVariant,
             as: 'variant',
-            attributes: ['id', 'color', 'price', 'stock']
+            attributes: ['id', 'color', 'price', 'stock','size']
           }
         ]
       },
@@ -191,12 +191,12 @@ const addToCart = catchAsync(async (req, res, next) => {
           {
             model: Product,
             as: 'product',
-            attributes: ['id', 'name', 'price', 'stock', 'originalPrice', 'discountPercentage']
+            attributes: ['id', 'name', 'price', 'stock', 'originalPrice', 'discountPercentage', 'image']
           },
           {
             model: ProductVariant,
             as: 'variant',
-            attributes: ['id', 'color', 'price', 'stock']
+            attributes: ['id', 'color', 'price', 'stock', 'size']
           }
         ]
       }
@@ -298,12 +298,12 @@ const updateCartItem = catchAsync(async (req, res, next) => {
           {
             model: Product,
             as: 'product',
-            attributes: ['id', 'name', 'price', 'stock']
+            attributes: ['id', 'name', 'price', 'stock', 'image']
           },
           {
             model: ProductVariant,
             as: 'variant',
-            attributes: ['id', 'color', 'price', 'stock']
+            attributes: ['id', 'color', 'price', 'stock', 'size']
           }
         ]
       },
@@ -376,7 +376,12 @@ const removeFromCart = catchAsync(async (req, res, next) => {
           {
             model: Product,
             as: 'product',
-            attributes: ['id', 'name', 'price', 'stock']
+            attributes: ['id', 'name', 'price', 'stock', 'image']
+          },
+          {
+            model: ProductVariant,
+            as: 'variant',
+            attributes: ['id', 'color', 'price', 'stock', 'size']
           }
         ]
       },
