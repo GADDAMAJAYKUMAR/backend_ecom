@@ -129,7 +129,7 @@ const getOrder = catchAsync(async (req, res, next) => {
  */
 const placeOrder = catchAsync(async (req, res, next) => {
   const userId = req.user.id;
-  const { shippingAddressId, paymentMethod = 'cod', notes } = req.body;
+  const { shippingAddressId, paymentMethod = 'cod', notes, isPickup } = req.body;
 
   // Validation
   if (!shippingAddressId) {
@@ -258,12 +258,13 @@ const placeOrder = catchAsync(async (req, res, next) => {
         taxAmount,
         discountAmount: couponDiscount,
         finalAmount,
-        status: 'pending',
-        paymentStatus: paymentMethod === 'cod' ? 'pending' : 'pending',
+        status: isPickup ? 'ready_for_pickup' : 'pending',
+        paymentStatus: 'pending',
         paymentMethod,
         notes,
         couponId: cart.appliedCoupon ? cart.appliedCoupon.id : null,
-        estimatedDeliveryDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days from now
+        estimatedDeliveryDate: isPickup ? null : new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
+        pickupExpiry: isPickup ? new Date(Date.now() + 2 * 24 * 60 * 60 * 1000) : null
       },
       { transaction }
     );
@@ -371,7 +372,7 @@ const updateOrderStatus = catchAsync(async (req, res, next) => {
   const { status } = req.body;
 
   // Validate status
-  const validStatuses = ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'returned'];
+  const validStatuses = ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'returned', 'ready_for_pickup'];
   if (!validStatuses.includes(status)) {
     return next(new AppError('Invalid order status', 400));
   }
@@ -384,13 +385,14 @@ const updateOrderStatus = catchAsync(async (req, res, next) => {
 
   // Check if status update is valid
   const statusTransitions = {
-    pending: ['confirmed', 'cancelled'],
-    confirmed: ['processing', 'cancelled'],
-    processing: ['shipped', 'cancelled'],
+    pending: ['confirmed', 'cancelled', 'ready_for_pickup'],
+    confirmed: ['processing', 'cancelled', 'ready_for_pickup'],
+    processing: ['shipped', 'cancelled', 'ready_for_pickup'],
     shipped: ['delivered', 'returned'],
     delivered: ['returned'],
     cancelled: [],
-    returned: []
+    returned: [],
+    ready_for_pickup: ['delivered', 'cancelled']
   };
 
   if (!statusTransitions[order.status].includes(status)) {
@@ -659,7 +661,7 @@ const getOrderAnalytics = catchAsync(async (req, res, next) => {
  */
 const buyNow = catchAsync(async (req, res, next) => {
   const userId = req.user.id;
-  const { productId, productVariantId, quantity, shippingAddressId, paymentMethod = 'cod', notes } = req.body;
+  const { productId, productVariantId, quantity, shippingAddressId, paymentMethod = 'cod', notes, isPickup } = req.body;
 
   // Validation
   if (!productId || !quantity || !shippingAddressId) {
@@ -727,11 +729,12 @@ const buyNow = catchAsync(async (req, res, next) => {
         taxAmount,
         discountAmount,
         finalAmount,
-        status: 'pending',
+        status: isPickup ? 'ready_for_pickup' : 'pending',
         paymentStatus: 'pending',
         paymentMethod,
         notes,
-        estimatedDeliveryDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+        estimatedDeliveryDate: isPickup ? null : new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
+        pickupExpiry: isPickup ? new Date(Date.now() + 2 * 24 * 60 * 60 * 1000) : null
       },
       { transaction }
     );

@@ -83,7 +83,8 @@ const Order = sequelize.define('Order', {
       'shipped',
       'delivered',
       'cancelled',
-      'returned'
+      'returned',
+      'ready_for_pickup'
     ),
     defaultValue: 'pending',
     validate: {
@@ -109,6 +110,10 @@ const Order = sequelize.define('Order', {
     allowNull: true
   },
   estimatedDeliveryDate: {
+    type: DataTypes.DATE,
+    allowNull: true
+  },
+  pickupExpiry: {
     type: DataTypes.DATE,
     allowNull: true
   },

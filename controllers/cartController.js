@@ -1,4 +1,4 @@
-const { Cart, CartItem, Product, ProductVariant, User, Coupon } = require('../models');
+const { Cart, CartItem, Product, ProductVariant, User, Coupon, ProductImage } = require('../models');
 const AppError = require('../utils/AppError');
 const catchAsync = require('../utils/catchAsync');
 const messages = require('../constants/messages');
@@ -44,7 +44,14 @@ const getCart = catchAsync(async (req, res, next) => {
           {
             model: Product,
             as: 'product',
-            attributes: ['id', 'name', 'price', 'stock', 'originalPrice', 'discountPercentage', 'image']
+            attributes: ['id', 'name', 'price', 'stock', 'originalPrice', 'discountPercentage', 'image'],
+            include: [
+              {
+                model: ProductImage,
+                as: 'images',
+                attributes: ['id', 'imageUrl']
+              }
+            ]
           },
           {
             model: ProductVariant,
@@ -191,7 +198,14 @@ const addToCart = catchAsync(async (req, res, next) => {
           {
             model: Product,
             as: 'product',
-            attributes: ['id', 'name', 'price', 'stock', 'originalPrice', 'discountPercentage', 'image']
+            attributes: ['id', 'name', 'price', 'stock', 'originalPrice', 'discountPercentage', 'image'],
+            include: [
+              {
+                model: ProductImage,
+                as: 'images',
+                attributes: ['id', 'imageUrl']
+              }
+            ]
           },
           {
             model: ProductVariant,
@@ -298,7 +312,14 @@ const updateCartItem = catchAsync(async (req, res, next) => {
           {
             model: Product,
             as: 'product',
-            attributes: ['id', 'name', 'price', 'stock', 'image']
+            attributes: ['id', 'name', 'price', 'stock', 'originalPrice', 'discountPercentage', 'image'],
+            include: [
+              {
+                model: ProductImage,
+                as: 'images',
+                attributes: ['id', 'imageUrl']
+              }
+            ]
           },
           {
             model: ProductVariant,
@@ -376,7 +397,14 @@ const removeFromCart = catchAsync(async (req, res, next) => {
           {
             model: Product,
             as: 'product',
-            attributes: ['id', 'name', 'price', 'stock', 'image']
+            attributes: ['id', 'name', 'price', 'stock', 'originalPrice', 'discountPercentage', 'image'],
+            include: [
+              {
+                model: ProductImage,
+                as: 'images',
+                attributes: ['id', 'imageUrl']
+              }
+            ]
           },
           {
             model: ProductVariant,
