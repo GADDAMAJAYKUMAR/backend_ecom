@@ -132,7 +132,7 @@ const placeOrder = catchAsync(async (req, res, next) => {
   const { shippingAddressId, paymentMethod = 'cod', notes, isPickup } = req.body;
 
   // Validation
-  if (!shippingAddressId) {
+  if (!isPickup && !shippingAddressId) {
     return next(new AppError('Shipping address is required', 400));
   }
 
@@ -170,10 +170,11 @@ const placeOrder = catchAsync(async (req, res, next) => {
     return next(new AppError('Cart is empty. Cannot place order', 400));
   }
 
-  // Verify shipping address exists and belongs to user
-  const shippingAddress = await ShippingAddress.findByPk(shippingAddressId);
-  if (!shippingAddress || shippingAddress.userId !== userId) {
-    return next(new AppError('Shipping address not found or invalid', 404));
+  if (!isPickup) {
+    const shippingAddress = await ShippingAddress.findByPk(shippingAddressId);
+    if (!shippingAddress || shippingAddress.userId !== userId) {
+      return next(new AppError('Shipping address not found or invalid', 404));
+    }
   }
 
   // Transaction to ensure data consistency
@@ -224,7 +225,7 @@ const placeOrder = catchAsync(async (req, res, next) => {
 
     // Calculate order totals
     const subtotal = parseFloat(cart.totalPrice);
-    const shippingCost = 50; // Fixed shipping cost
+    const shippingCost = isPickup ? 0 : 50; // 0 for pickup, 50 for shipping
     const taxAmount = Math.round((subtotal * 5) / 100); // 5% tax
     
     // Calculate coupon discount
@@ -251,8 +252,7 @@ const placeOrder = catchAsync(async (req, res, next) => {
     const order = await Order.create(
       {
         orderNumber,
-        userId,
-        shippingAddressId,
+        shippingAddressId: isPickup ? null : shippingAddressId,
         totalPrice: subtotal,
         shippingCost,
         taxAmount,
@@ -524,7 +524,7 @@ const cancelOrder = catchAsync(async (req, res, next) => {
   }
 
   // Check if order can be cancelled
-  if (!['pending', 'confirmed', 'processing'].includes(order.status)) {
+  if (!['pending', 'confirmed', 'processing', 'ready_for_pickup'].includes(order.status)) {
     return next(
       new AppError(
         `Cannot cancel order with status '${order.status}'`,
@@ -664,7 +664,7 @@ const buyNow = catchAsync(async (req, res, next) => {
   const { productId, productVariantId, quantity, shippingAddressId, paymentMethod = 'cod', notes, isPickup } = req.body;
 
   // Validation
-  if (!productId || !quantity || !shippingAddressId) {
+  if (!productId || !quantity || (!isPickup && !shippingAddressId)) {
     return next(new AppError('Product ID, quantity, and shipping address are required', 400));
   }
 
@@ -672,10 +672,11 @@ const buyNow = catchAsync(async (req, res, next) => {
     return next(new AppError('Invalid payment method', 400));
   }
 
-  // Verify shipping address
-  const shippingAddress = await ShippingAddress.findByPk(shippingAddressId);
-  if (!shippingAddress || shippingAddress.userId !== userId) {
-    return next(new AppError('Shipping address not found or invalid', 404));
+  if (!isPickup) {
+    const shippingAddress = await ShippingAddress.findByPk(shippingAddressId);
+    if (!shippingAddress || shippingAddress.userId !== userId) {
+      return next(new AppError('Shipping address not found or invalid', 404));
+    }
   }
 
   // Transaction to ensure data consistency
@@ -710,7 +711,7 @@ const buyNow = catchAsync(async (req, res, next) => {
     // Determine price using variant price or base price
     const unitPrice = variant ? parseFloat(variant.price) : parseFloat(product.price);
     const subtotal = unitPrice * quantity;
-    const shippingCost = 50; // Fixed shipping for now
+    const shippingCost = isPickup ? 0 : 50; // 0 for pickup, 50 for shipping
     const taxAmount = Math.round((subtotal * 5) / 100); // 5% tax
     const discountAmount = 0;
     const finalAmount = subtotal + shippingCost + taxAmount - discountAmount;
@@ -723,7 +724,7 @@ const buyNow = catchAsync(async (req, res, next) => {
       {
         orderNumber,
         userId,
-        shippingAddressId,
+        shippingAddressId: isPickup ? null : shippingAddressId,
         totalPrice: subtotal,
         shippingCost,
         taxAmount,

@@ -32,7 +32,7 @@ const Order = sequelize.define('Order', {
   },
   shippingAddressId: {
     type: DataTypes.UUID,
-    allowNull: false,
+    allowNull: true,
     references: {
       model: 'shipping_addresses',
       key: 'id'
