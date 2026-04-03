@@ -34,7 +34,7 @@ const getOrders = catchAsync(async (req, res, next) => {
           {
             model: Product,
             as: 'product',
-            attributes: ['id', 'name', 'price']
+            attributes: ['id', 'name', 'price', 'image'] 
           },
           {
             model: ProductVariant,
@@ -54,10 +54,16 @@ const getOrders = catchAsync(async (req, res, next) => {
     offset: parseInt(offset)
   });
 
+  const ordersWithPickupInfo = rows.map(order => ({
+    ...order.toJSON(),
+    isPickup: order.status === 'ready_for_pickup',
+    pickupExpiry: order.pickupExpiry
+  }));
+
   res.status(200).json({
     status: 'success',
     data: {
-      orders: rows,
+      orders: ordersWithPickupInfo,
       pagination: {
         total: count,
         page: parseInt(page),
@@ -85,7 +91,7 @@ const getOrder = catchAsync(async (req, res, next) => {
           {
             model: Product,
             as: 'product',
-            attributes: ['id', 'name', 'price', 'stock']
+            attributes: ['id', 'name', 'price', 'stock', 'image']
           },
           {
             model: ProductVariant,
@@ -115,10 +121,16 @@ const getOrder = catchAsync(async (req, res, next) => {
     return next(new AppError('Unauthorized access to this order', 403));
   }
 
+  const orderWithPickupInfo = {
+    ...order.toJSON(),
+    isPickup: order.status === 'ready_for_pickup',
+    pickupExpiry: order.pickupExpiry
+  };
+
   res.status(200).json({
     status: 'success',
     data: {
-      order
+      order: orderWithPickupInfo
     }
   });
 });
@@ -252,6 +264,7 @@ const placeOrder = catchAsync(async (req, res, next) => {
     const order = await Order.create(
       {
         orderNumber,
+        userId,
         shippingAddressId: isPickup ? null : shippingAddressId,
         totalPrice: subtotal,
         shippingCost,
@@ -334,7 +347,7 @@ const placeOrder = catchAsync(async (req, res, next) => {
             {
               model: Product,
               as: 'product',
-              attributes: ['id', 'name']
+              attributes: ['id', 'name', 'image','price']
             },
             {
               model: ProductVariant,
@@ -350,11 +363,17 @@ const placeOrder = catchAsync(async (req, res, next) => {
       ]
     });
 
+    const orderWithPickupInfo = {
+      ...createdOrder.toJSON(),
+      isPickup: createdOrder.status === 'ready_for_pickup',
+      pickupExpiry: createdOrder.pickupExpiry
+    };
+
     res.status(201).json({
       status: 'success',
       message: 'Order placed successfully',
       data: {
-        order: createdOrder
+        order: orderWithPickupInfo
       }
     });
   } catch (error) {
@@ -427,11 +446,17 @@ const updateOrderStatus = catchAsync(async (req, res, next) => {
     ]
   });
 
+  const orderWithPickupInfo = {
+    ...updatedOrder.toJSON(),
+    isPickup: updatedOrder.status === 'ready_for_pickup',
+    pickupExpiry: updatedOrder.pickupExpiry
+  };
+
   res.status(200).json({
     status: 'success',
     message: 'Order status updated successfully',
     data: {
-      order: updatedOrder
+      order: orderWithPickupInfo
     }
   });
 });
@@ -477,11 +502,17 @@ const updatePaymentStatus = catchAsync(async (req, res, next) => {
     ]
   });
 
+  const orderWithPickupInfo = {
+    ...updatedOrder.toJSON(),
+    isPickup: updatedOrder.status === 'ready_for_pickup',
+    pickupExpiry: updatedOrder.pickupExpiry
+  };
+
   res.status(200).json({
     status: 'success',
     message: 'Payment status updated successfully',
     data: {
-      order: updatedOrder
+      order: orderWithPickupInfo
     }
   });
 });
@@ -580,11 +611,17 @@ const cancelOrder = catchAsync(async (req, res, next) => {
       ]
     });
 
+    const orderWithPickupInfo = {
+      ...cancelledOrder.toJSON(),
+      isPickup: cancelledOrder.status === 'ready_for_pickup',
+      pickupExpiry: cancelledOrder.pickupExpiry
+    };
+
     res.status(200).json({
       status: 'success',
       message: 'Order cancelled successfully',
       data: {
-        order: cancelledOrder
+        order: orderWithPickupInfo
       }
     });
   } catch (error) {
@@ -779,7 +816,7 @@ const buyNow = catchAsync(async (req, res, next) => {
           model: OrderItem,
           as: 'items',
           include: [
-            { model: Product, as: 'product', attributes: ['id', 'name'] },
+            { model: Product, as: 'product', attributes: ['id', 'name', 'image'] },
             { model: ProductVariant, as: 'variant', attributes: ['id', 'color', 'size'] }
           ]
         },
@@ -787,11 +824,17 @@ const buyNow = catchAsync(async (req, res, next) => {
       ]
     });
 
+    const orderWithPickupInfo = {
+      ...createdOrder.toJSON(),
+      isPickup: createdOrder.status === 'ready_for_pickup',
+      pickupExpiry: createdOrder.pickupExpiry
+    };
+
     res.status(201).json({
       status: 'success',
       message: 'Order placed successfully',
       data: {
-        order: createdOrder
+        order: orderWithPickupInfo
       }
     });
 

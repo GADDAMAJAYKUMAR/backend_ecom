@@ -12,6 +12,7 @@ router.use(protect);
 // Validation middleware
 const placeOrderValidation = [
   body('shippingAddressId')
+    .if((value, { req }) => !req.body.isPickup)
     .trim()
     .notEmpty()
     .withMessage('Shipping address ID is required')
@@ -19,6 +20,8 @@ const placeOrderValidation = [
     .withMessage('Shipping address ID must be a valid UUID'),
   body('paymentMethod')
     .optional()
+    .trim()
+    .toLowerCase()
     .isIn(['credit_card', 'debit_card', 'upi', 'net_banking', 'wallet', 'cod'])
     .withMessage('Invalid payment method'),
   body('notes')
@@ -31,9 +34,19 @@ const placeOrderValidation = [
 const buyNowValidation = [
   body('productId').notEmpty().withMessage('Product ID is required').isUUID().withMessage('Invalid product ID'),
   body('quantity').notEmpty().withMessage('Quantity is required').isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
-  body('shippingAddressId').notEmpty().withMessage('Shipping address ID is required').isUUID().withMessage('Invalid shipping address ID'),
+  body('shippingAddressId')
+    .if((value, { req }) => !req.body.isPickup)
+    .notEmpty()
+    .withMessage('Shipping address ID is required')
+    .isUUID()
+    .withMessage('Invalid shipping address ID'),
   body('productVariantId').optional().isUUID().withMessage('Invalid product variant ID'),
-  body('paymentMethod').optional().isIn(['credit_card', 'debit_card', 'upi', 'net_banking', 'wallet', 'cod']).withMessage('Invalid payment method')
+  body('paymentMethod')
+    .optional()
+    .trim()
+    .toLowerCase()
+    .isIn(['credit_card', 'debit_card', 'upi', 'net_banking', 'wallet', 'cod'])
+    .withMessage('Invalid payment method')
 ];
 
 
@@ -116,11 +129,24 @@ router.get('/', getOrdersValidation, validate, orderController.getOrders);
 router.get('/analytics/summary', orderController.getOrderAnalytics);
 router.get('/:orderId', orderIdValidation, validate, orderController.getOrder);
 
+router.post('/', placeOrderValidation, validate, orderController.placeOrder);
 router.post('/place', placeOrderValidation, validate, orderController.placeOrder);
 router.post('/buy-now', buyNowValidation, validate, orderController.buyNow);
 
 router.patch(
   '/:orderId/status',
+  updateOrderStatusValidation,
+  validate,
+  orderController.updateOrderStatus
+);
+router.patch(
+  '/:orderId',
+  updateOrderStatusValidation,
+  validate,
+  orderController.updateOrderStatus
+);
+router.put(
+  '/:orderId',
   updateOrderStatusValidation,
   validate,
   orderController.updateOrderStatus
