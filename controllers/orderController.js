@@ -229,6 +229,7 @@ const placeOrder = catchAsync(async (req, res, next) => {
         productId: product.id,
         productVariantId: cartItem.productVariantId,
         productName: product.name,
+        productImage: product.image,
         quantity: cartItem.quantity,
         priceAtPurchase: parseFloat(cartItem.price),
         totalPrice: parseFloat(cartItem.totalPrice)
@@ -784,6 +785,7 @@ const buyNow = catchAsync(async (req, res, next) => {
         productId: product.id,
         productVariantId: productVariantId || null,
         productName: product.name,
+        productImage: product.image,
         quantity,
         priceAtPurchase: unitPrice,
         totalPrice: subtotal

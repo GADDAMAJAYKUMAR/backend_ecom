@@ -42,6 +42,10 @@ const OrderItem = sequelize.define('OrderItem', {
     type: DataTypes.STRING,
     allowNull: false
   },
+  productImage: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
   quantity: {
     type: DataTypes.INTEGER,
     allowNull: false,
