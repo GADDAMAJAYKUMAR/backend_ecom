@@ -63,7 +63,10 @@ const OrderItem = sequelize.define('OrderItem', {
     validate: {
       min: 0
     }
-  },
+  },productImage: {
+  type: DataTypes.STRING,
+  allowNull: true
+},
   status: {
     type: DataTypes.ENUM('pending', 'dispatched', 'delivered', 'cancelled', 'returned'),
     defaultValue: 'pending'
